@@ -15,6 +15,19 @@ const SUPABASE_URL = process.env.SUPABASE_URL || 'https://your-project.supabase.
 const SUPABASE_ANON_KEY = process.env.SUPABASE_ANON_KEY || 'your-anon-key';
 const TENANT_ID = process.env.TENANT_ID || 1;
 
+// Mapping локаций к массивам tenant_id
+const LOCATION_TENANT_MAPPING = {
+  'Чиревея': [4],
+  'Патраикс': [2, 4], // Множественный тенант
+  'Angel Guimera': [2, 4], // Множественный тенант
+  'Calle Sant Pedro Pascual,9, Angel Guimera': [2, 4],
+  'Albal': [3],
+  'Benicalap': [3],
+  'Benicalar': [3], // Пока на тенант 3
+  // Неизвестные локации по умолчанию идут в тенант 2
+  'Unknown': [2]
+};
+
 // Создаем Supabase клиент
 const supabase = createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
 
@@ -53,7 +66,8 @@ function parseLeadFromMessage(text) {
     // Известные локации
     const locations = [
       'Angel Guimera', 'Benicalap', 'Benicalar',
-      'Calle Sant Pedro Pascual,9, Angel Guimera'
+      'Calle Sant Pedro Pascual,9, Angel Guimera',
+      'Чиревея', 'Патраикс', 'Albal'
     ];
 
     // Ищем локацию
@@ -97,40 +111,52 @@ function parseLeadFromMessage(text) {
   }
 }
 
-// Создание лида в CRM через Supabase
+// Создание лидов в CRM через Supabase (поддержка множественных тенантов)
 async function createLeadInCRM(leadData) {
   try {
-    console.log('📤 Создаем лид в Supabase:', leadData);
+    console.log('📤 Создаем лиды в Supabase:', leadData);
+
+    // Определяем тенантов для данной локации
+    const tenantIds = LOCATION_TENANT_MAPPING[leadData.location] || LOCATION_TENANT_MAPPING['Unknown'];
+    console.log(`🏢 Локация "${leadData.location}" принадлежит тенантам:`, tenantIds);
 
     const currentTime = new Date().toISOString();
+    const createdLeads = [];
 
-    // Создаем лид в таблице leads
-    const { data, error } = await supabase
-      .from('leads')
-      .insert({
-        name: leadData.name,
-        phone: leadData.phone,
-        source: leadData.source,
-        notes: `Локация: ${leadData.location}\nОригинальное сообщение: ${leadData.raw_message}`,
-        status: 'prospecto',
-        tenant_id: parseInt(TENANT_ID),
-        tenant_ids: [TENANT_ID.toString()], // Массив со строковым ID тенанта
-        created_at: currentTime,
-        status_updated_at: currentTime
-      })
-      .select()
-      .single();
+    // Создаем отдельный лид для каждого тенанта
+    for (const tenantId of tenantIds) {
+      console.log(`📝 Создаем лид для tenant_id: ${tenantId}`);
 
-    if (error) {
-      console.error('❌ Supabase error:', error);
-      throw error;
+      const { data, error } = await supabase
+        .from('leads')
+        .insert({
+          name: leadData.name,
+          phone: leadData.phone,
+          source: leadData.source,
+          notes: `Локация: ${leadData.location}\nОригинальное сообщение: ${leadData.raw_message}`,
+          status: 'prospecto',
+          tenant_id: tenantId,
+          tenant_ids: [tenantId.toString()], // Массив со строковым ID тенанта
+          created_at: currentTime,
+          status_updated_at: currentTime
+        })
+        .select()
+        .single();
+
+      if (error) {
+        console.error(`❌ Supabase error для tenant ${tenantId}:`, error);
+        throw error;
+      }
+
+      console.log(`✅ Лид создан для tenant ${tenantId}:`, data);
+      createdLeads.push(data);
     }
 
-    console.log('✅ Лид создан в Supabase:', data);
-    return data;
+    console.log(`🎯 Всего создано лидов: ${createdLeads.length}`);
+    return createdLeads;
 
   } catch (error) {
-    console.error('❌ Ошибка создания лида в Supabase:', error.message);
+    console.error('❌ Ошибка создания лидов в Supabase:', error.message);
     throw error;
   }
 }
