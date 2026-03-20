@@ -219,7 +219,7 @@ app.get('/check-leads', async (req, res) => {
   try {
     const { data, error } = await supabase
       .from('leads')
-      .select('id, name, phone, tenant_id, created_at')
+      .select('id, name, phone, tenant_id, source, status, created_at')
       .order('created_at', { ascending: false })
       .limit(10);
 
@@ -227,11 +227,25 @@ app.get('/check-leads', async (req, res) => {
       throw error;
     }
 
+    // Группируем по tenant_id
+    const byTenant = data.reduce((acc, lead) => {
+      acc[lead.tenant_id] = acc[lead.tenant_id] || [];
+      acc[lead.tenant_id].push(lead);
+      return acc;
+    }, {});
+
     res.json({
       success: true,
       total_leads: data.length,
       recent_leads: data,
-      current_tenant_id: parseInt(TENANT_ID)
+      current_tenant_id: parseInt(TENANT_ID),
+      leads_by_tenant: byTenant,
+      config: {
+        tenant_id: TENANT_ID,
+        chat_id: ALLOWED_CHAT_ID,
+        supabase_url: SUPABASE_URL,
+        has_valid_config: !!(SUPABASE_URL && SUPABASE_URL !== 'https://your-project.supabase.co')
+      }
     });
   } catch (error) {
     res.status(500).json({
