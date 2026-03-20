@@ -8,7 +8,8 @@ app.use(bodyParser.json());
 // Конфигурация
 const PORT = process.env.PORT || 3001;
 const TELEGRAM_BOT_TOKEN = process.env.TELEGRAM_BOT_TOKEN || 'YOUR_BOT_TOKEN';
-const ALLOWED_CHAT_ID = process.env.CHAT_ID || '-1002155936007';
+// Поддержка нескольких чатов (через запятую)
+const ALLOWED_CHAT_IDS = (process.env.CHAT_ID || '-1002155936007').split(',').map(id => id.trim());
 
 // Supabase конфигурация
 const SUPABASE_URL = process.env.SUPABASE_URL || 'https://your-project.supabase.co';
@@ -175,9 +176,9 @@ app.post('/webhook', async (req, res) => {
 
       console.log(`📨 Сообщение от ${chatId}: ${messageText}`);
 
-      // Проверяем, что сообщение из нужной группы
-      if (chatId.toString() !== ALLOWED_CHAT_ID) {
-        console.log(`⚠️ Сообщение из неразрешенного чата: ${chatId}, ожидается: ${ALLOWED_CHAT_ID}`);
+      // Проверяем, что сообщение из разрешенной группы
+      if (!ALLOWED_CHAT_IDS.includes(chatId.toString())) {
+        console.log(`⚠️ Сообщение из неразрешенного чата: ${chatId}, разрешенные: ${ALLOWED_CHAT_IDS.join(', ')}`);
         res.status(200).json({ ok: true });
         return;
       }
@@ -235,7 +236,7 @@ app.get('/status', (req, res) => {
     message: 'Telegram-CRM integration server is running',
     config: {
       tenant_id: TENANT_ID,
-      chat_id: ALLOWED_CHAT_ID,
+      allowed_chat_ids: ALLOWED_CHAT_IDS,
       has_supabase_config: !!(SUPABASE_URL && SUPABASE_URL !== 'https://your-project.supabase.co')
     }
   });
