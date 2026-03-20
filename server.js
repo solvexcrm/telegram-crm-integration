@@ -114,6 +114,7 @@ async function createLeadInCRM(leadData) {
         notes: `Локация: ${leadData.location}\nОригинальное сообщение: ${leadData.raw_message}`,
         status: 'prospecto',
         tenant_id: parseInt(TENANT_ID),
+        tenant_ids: [TENANT_ID.toString()], // Массив со строковым ID тенанта
         created_at: currentTime,
         status_updated_at: currentTime
       })
