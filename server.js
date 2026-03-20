@@ -205,8 +205,40 @@ app.get('/status', (req, res) => {
   res.json({
     status: 'running',
     timestamp: new Date().toISOString(),
-    message: 'Telegram-CRM integration server is running'
+    message: 'Telegram-CRM integration server is running',
+    config: {
+      tenant_id: TENANT_ID,
+      chat_id: ALLOWED_CHAT_ID,
+      has_supabase_config: !!(SUPABASE_URL && SUPABASE_URL !== 'https://your-project.supabase.co')
+    }
   });
+});
+
+// Endpoint для проверки лидов в Supabase
+app.get('/check-leads', async (req, res) => {
+  try {
+    const { data, error } = await supabase
+      .from('leads')
+      .select('id, name, phone, tenant_id, created_at')
+      .order('created_at', { ascending: false })
+      .limit(10);
+
+    if (error) {
+      throw error;
+    }
+
+    res.json({
+      success: true,
+      total_leads: data.length,
+      recent_leads: data,
+      current_tenant_id: parseInt(TENANT_ID)
+    });
+  } catch (error) {
+    res.status(500).json({
+      success: false,
+      error: error.message
+    });
+  }
 });
 
 // Запуск сервера
