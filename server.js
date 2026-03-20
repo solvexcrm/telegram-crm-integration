@@ -1,0 +1,220 @@
+const express = require('express');
+const bodyParser = require('body-parser');
+const { createClient } = require('@supabase/supabase-js');
+
+const app = express();
+app.use(bodyParser.json());
+
+// Конфигурация
+const PORT = process.env.PORT || 3001;
+const TELEGRAM_BOT_TOKEN = process.env.TELEGRAM_BOT_TOKEN || 'YOUR_BOT_TOKEN';
+const ALLOWED_CHAT_ID = process.env.CHAT_ID || '-1002155936007';
+
+// Supabase конфигурация
+const SUPABASE_URL = process.env.SUPABASE_URL || 'https://your-project.supabase.co';
+const SUPABASE_ANON_KEY = process.env.SUPABASE_ANON_KEY || 'your-anon-key';
+const TENANT_ID = process.env.TENANT_ID || 1;
+
+// Создаем Supabase клиент
+const supabase = createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+
+// Парсер лидов из сообщений AlbatoBot
+function parseLeadFromMessage(text) {
+  console.log('📨 Получено сообщение:', text);
+
+  // Проверяем, что это сообщение с лидом
+  if (!text.includes('Кладовки исп НОВАЯ ФОРМА')) {
+    console.log('❌ Не является сообщением с лидом');
+    return null;
+  }
+
+  try {
+    // Убираем префикс
+    let content = text.replace('Кладовки исп НОВАЯ ФОРМА', '').trim();
+    console.log('🔧 Контент после удаления префикса:', content);
+
+    // Ищем телефон (начинается с +34)
+    const phoneMatch = content.match(/\+34\d{9}/);
+    if (!phoneMatch) {
+      console.log('❌ Телефон не найден');
+      return null;
+    }
+
+    const phone = phoneMatch[0];
+    console.log('📞 Найден телефон:', phone);
+
+    // Удаляем телефон из строки
+    content = content.replace(phone, '').trim();
+
+    // Определяем локацию и имя
+    let location = '';
+    let name = '';
+
+    // Известные локации
+    const locations = [
+      'Angel Guimera', 'Benicalap', 'Benicalar',
+      'Calle Sant Pedro Pascual,9, Angel Guimera'
+    ];
+
+    // Ищем локацию
+    for (const loc of locations) {
+      if (content.includes(loc)) {
+        location = loc;
+        name = content.replace(loc, '').trim();
+        // Убираем дату если есть (например "с 16.03Marce")
+        name = name.replace(/,?\s*с\s*\d{2}\.\d{2}\w*/, '').trim();
+        break;
+      }
+    }
+
+    // Если локация не найдена, пробуем другой подход
+    if (!location) {
+      // Берем все что до имени как локацию
+      const parts = content.split(/(?=[A-Z][a-z])/); // Разделяем по заглавным буквам
+      if (parts.length >= 2) {
+        location = parts[0].trim();
+        name = parts.slice(1).join('').trim();
+      } else {
+        location = 'Unknown';
+        name = content;
+      }
+    }
+
+    console.log('🏢 Локация:', location);
+    console.log('👤 Имя:', name);
+
+    return {
+      name: name || 'Lead from Facebook',
+      phone: phone,
+      location: location,
+      source: 'Facebook',
+      raw_message: text
+    };
+
+  } catch (error) {
+    console.error('❌ Ошибка парсинга:', error);
+    return null;
+  }
+}
+
+// Создание лида в CRM через Supabase
+async function createLeadInCRM(leadData) {
+  try {
+    console.log('📤 Создаем лид в Supabase:', leadData);
+
+    const currentTime = new Date().toISOString();
+
+    // Создаем лид в таблице leads
+    const { data, error } = await supabase
+      .from('leads')
+      .insert({
+        name: leadData.name,
+        phone: leadData.phone,
+        source: leadData.source,
+        notes: `Локация: ${leadData.location}\nОригинальное сообщение: ${leadData.raw_message}`,
+        status: 'prospecto',
+        tenant_id: parseInt(TENANT_ID),
+        created_at: currentTime,
+        status_updated_at: currentTime
+      })
+      .select()
+      .single();
+
+    if (error) {
+      console.error('❌ Supabase error:', error);
+      throw error;
+    }
+
+    console.log('✅ Лид создан в Supabase:', data);
+    return data;
+
+  } catch (error) {
+    console.error('❌ Ошибка создания лида в Supabase:', error.message);
+    throw error;
+  }
+}
+
+// Webhook для получения сообщений от Telegram
+app.post('/webhook', async (req, res) => {
+  try {
+    console.log('📬 Получен webhook от Telegram:', JSON.stringify(req.body, null, 2));
+
+    const update = req.body;
+
+    // Проверяем, что это текстовое сообщение
+    if (update.message && update.message.text) {
+      const messageText = update.message.text;
+      const chatId = update.message.chat.id;
+
+      console.log(`📨 Сообщение от ${chatId}: ${messageText}`);
+
+      // Проверяем, что сообщение из нужной группы
+      if (chatId.toString() !== ALLOWED_CHAT_ID) {
+        console.log(`⚠️ Сообщение из неразрешенного чата: ${chatId}, ожидается: ${ALLOWED_CHAT_ID}`);
+        res.status(200).json({ ok: true });
+        return;
+      }
+
+      // Парсим лид из сообщения
+      const leadData = parseLeadFromMessage(messageText);
+
+      if (leadData) {
+        console.log('✅ Лид распознан:', leadData);
+
+        try {
+          // Создаем лид в CRM
+          await createLeadInCRM(leadData);
+          console.log('🎯 Лид успешно создан в CRM!');
+
+          // Отправляем подтверждение в Telegram (опционально)
+          // await sendTelegramMessage(chatId, '✅ Лид добавлен в CRM!');
+
+        } catch (error) {
+          console.error('❌ Ошибка создания лида:', error);
+        }
+      } else {
+        console.log('ℹ️ Сообщение не является лидом, игнорируем');
+      }
+    }
+
+    res.status(200).json({ ok: true });
+
+  } catch (error) {
+    console.error('❌ Ошибка обработки webhook:', error);
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// Тестовый endpoint для проверки парсера
+app.post('/test-parser', (req, res) => {
+  const { message } = req.body;
+  if (!message) {
+    return res.status(400).json({ error: 'Message is required' });
+  }
+
+  const result = parseLeadFromMessage(message);
+  res.json({
+    original: message,
+    parsed: result,
+    success: !!result
+  });
+});
+
+// Статус сервера
+app.get('/status', (req, res) => {
+  res.json({
+    status: 'running',
+    timestamp: new Date().toISOString(),
+    message: 'Telegram-CRM integration server is running'
+  });
+});
+
+// Запуск сервера
+app.listen(PORT, () => {
+  console.log(`🚀 Telegram-CRM Integration Server запущен на порту ${PORT}`);
+  console.log(`📡 Webhook URL: http://localhost:${PORT}/webhook`);
+  console.log(`🧪 Тестовый парсер: http://localhost:${PORT}/test-parser`);
+  console.log(`📊 Статус: http://localhost:${PORT}/status`);
+});
+
+module.exports = app;
