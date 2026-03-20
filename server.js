@@ -255,6 +255,41 @@ app.get('/check-leads', async (req, res) => {
   }
 });
 
+// Endpoint для сравнения структуры лидов
+app.get('/compare-leads', async (req, res) => {
+  try {
+    const { data, error } = await supabase
+      .from('leads')
+      .select('*')
+      .order('created_at', { ascending: false })
+      .limit(5);
+
+    if (error) {
+      throw error;
+    }
+
+    // Разделяем на старые (работающие) и новые (webhook)
+    const oldLeads = data.filter(lead => lead.source !== 'Facebook');
+    const webhookLeads = data.filter(lead => lead.source === 'Facebook');
+
+    res.json({
+      success: true,
+      comparison: {
+        old_leads_structure: oldLeads[0] || null,
+        webhook_leads_structure: webhookLeads[0] || null,
+        all_old_fields: oldLeads.length > 0 ? Object.keys(oldLeads[0]) : [],
+        all_webhook_fields: webhookLeads.length > 0 ? Object.keys(webhookLeads[0]) : [],
+        differences: 'Сравните поля выше'
+      }
+    });
+  } catch (error) {
+    res.status(500).json({
+      success: false,
+      error: error.message
+    });
+  }
+});
+
 // Запуск сервера
 app.listen(PORT, () => {
   console.log(`🚀 Telegram-CRM Integration Server запущен на порту ${PORT}`);
