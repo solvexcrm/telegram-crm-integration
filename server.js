@@ -8,8 +8,12 @@ app.use(bodyParser.json());
 // Конфигурация
 const PORT = process.env.PORT || 3001;
 const TELEGRAM_BOT_TOKEN = process.env.TELEGRAM_BOT_TOKEN || 'YOUR_BOT_TOKEN';
-// Поддержка нескольких чатов (через запятую)
-const ALLOWED_CHAT_IDS = (process.env.CHAT_ID || '-1002155936007').split(',').map(id => id.trim());
+// Поддержка нескольких чатов через отдельные переменные
+const ALLOWED_CHAT_IDS = [
+  process.env.CHAT_ID,
+  process.env.CHAT_ID2,
+  process.env.CHAT_ID3 // На будущее если понадобится
+].filter(id => id && id.trim() !== ''); // Убираем пустые значения
 
 // Supabase конфигурация
 const SUPABASE_URL = process.env.SUPABASE_URL || 'https://your-project.supabase.co';
