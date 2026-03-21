@@ -179,6 +179,8 @@ app.post('/webhook', async (req, res) => {
       const chatId = update.message.chat.id;
 
       console.log(`📨 Сообщение от ${chatId}: ${messageText}`);
+      console.log(`👤 Отправитель:`, update.message.from);
+      console.log(`📋 Полное сообщение:`, JSON.stringify(update.message, null, 2));
 
       // Проверяем, что сообщение из разрешенной группы
       if (!ALLOWED_CHAT_IDS.includes(chatId.toString())) {
