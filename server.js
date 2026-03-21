@@ -116,14 +116,14 @@ function parseLeadFromMessage(text) {
   }
 }
 
-// Создание лидов в CRM через Supabase (поддержка множественных тенантов)
+// Создание лидов в CRM через Supabase (ВСЕ лиды во ВСЕ тенанты)
 async function createLeadInCRM(leadData) {
   try {
     console.log('📤 Создаем лиды в Supabase:', leadData);
 
-    // Определяем тенантов для данной локации
-    const tenantIds = LOCATION_TENANT_MAPPING[leadData.location] || LOCATION_TENANT_MAPPING['Unknown'];
-    console.log(`🏢 Локация "${leadData.location}" принадлежит тенантам:`, tenantIds);
+    // ВСЕ лиды идут во ВСЕ тенанты
+    const tenantIds = [2, 3, 4]; // Daniil, Vitalii, Alexandr
+    console.log(`🏢 Создаем лид во ВСЕХ тенантах:`, tenantIds);
 
     const currentTime = new Date().toISOString();
     const createdLeads = [];
@@ -157,7 +157,7 @@ async function createLeadInCRM(leadData) {
       createdLeads.push(data);
     }
 
-    console.log(`🎯 Всего создано лидов: ${createdLeads.length}`);
+    console.log(`🎯 Всего создано лидов: ${createdLeads.length} (во всех тенантах)`);
     return createdLeads;
 
   } catch (error) {
