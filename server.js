@@ -276,7 +276,7 @@ app.get('/check-leads', async (req, res) => {
       leads_by_tenant: byTenant,
       config: {
         tenant_id: TENANT_ID,
-        chat_id: ALLOWED_CHAT_ID,
+        chat_ids: ALLOWED_CHAT_IDS,
         supabase_url: SUPABASE_URL,
         has_valid_config: !!(SUPABASE_URL && SUPABASE_URL !== 'https://your-project.supabase.co')
       }
