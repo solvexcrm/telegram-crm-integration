@@ -173,6 +173,17 @@ app.post('/webhook', async (req, res) => {
 
     const update = req.body;
 
+    // Логируем все типы сообщений
+    if (update.message) {
+      console.log(`📨 Тип сообщения: ${update.message.text ? 'текст' : 'не текст'}`);
+      if (update.message.from) {
+        console.log(`👤 От: ${update.message.from.username || update.message.from.first_name} (ID: ${update.message.from.id})`);
+        if (update.message.from.is_bot) {
+          console.log(`🤖 Сообщение от бота: ${update.message.from.username || update.message.from.first_name}`);
+        }
+      }
+    }
+
     // Проверяем, что это текстовое сообщение
     if (update.message && update.message.text) {
       const messageText = update.message.text;
@@ -180,6 +191,8 @@ app.post('/webhook', async (req, res) => {
 
       console.log(`📨 Сообщение от ${chatId}: ${messageText}`);
       console.log(`👤 Отправитель:`, update.message.from);
+      console.log(`🤖 Это бот?:`, update.message.from.is_bot);
+      console.log(`👑 Username отправителя:`, update.message.from.username);
       console.log(`📋 Полное сообщение:`, JSON.stringify(update.message, null, 2));
 
       // Проверяем, что сообщение из разрешенной группы
@@ -208,6 +221,11 @@ app.post('/webhook', async (req, res) => {
         }
       } else {
         console.log('ℹ️ Сообщение не является лидом, игнорируем');
+        console.log(`🔍 Проверяемый текст: "${messageText}"`);
+        console.log(`🔍 Содержит "Кладовки исп НОВАЯ ФОРМА"?:`, messageText.includes('Кладовки исп НОВАЯ ФОРМА'));
+        if (update.message.from.username === 'albato_bot' || update.message.from.first_name?.includes('Albato')) {
+          console.log('🚨 СООБЩЕНИЕ ОТ ALBATO НЕ РАСПОЗНАНО КАК ЛИД!');
+        }
       }
     }
 
